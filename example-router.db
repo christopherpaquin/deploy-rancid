@@ -23,7 +23,7 @@
 # -----------
 # Each non-comment line uses the following format:
 #
-#   <device-name>:<device-type>[:<state>]
+#   <device-name>;<device-type>;<state>
 #
 # FIELD DEFINITIONS
 # -----------------
@@ -36,9 +36,13 @@
 #   - Tells RANCID which vendor/collector to use
 #   - Must match a supported RANCID device type
 #
-# <state> (optional)
-#   - "up"   (default) → device is collected
-#   - "down"           → device is skipped without error
+# <state> (REQUIRED)
+#   - "up"   → device is collected (MUST be specified for active devices)
+#   - "down" → device is skipped without error
+#
+# IMPORTANT: The state field is REQUIRED. Devices without "up" state will
+#            NOT be collected by RANCID. Always specify "up" for
+#            devices you want to monitor.
 #
 ###############################################################################
 
@@ -61,15 +65,15 @@
 ###############################################################################
 
 # Core Juniper switches
-# jun-core-01:juniper
-# jun-core-02:juniper
+# jun-core-01;juniper;up
+# jun-core-02;juniper;up
 
 # Core Arista switches
-# arista-core-01:arista
-# arista-core-02:arista
+# arista-core-01;arista;up
+# arista-core-02;arista;up
 
 # Core Dell OS10 switch
-# dell-core-01:dell
+# dell-core-01;dell;up
 
 ###############################################################################
 # EXAMPLES — DIFFERENT VENDORS IN SAME GROUP
@@ -77,18 +81,18 @@
 # Usage-based grouping allows multiple vendors in a single group.
 ###############################################################################
 
-# mor-sw-01:dell
-# mor-sw-02:cisco
+# mor-sw-01;dell;up
+# mor-sw-02;cisco;up
 
 ###############################################################################
 # TEMPORARILY DISABLED DEVICES
 # ----------------------------
-# Use ":down" instead of removing entries.
+# Use ";down" instead of removing entries.
 # This preserves history and avoids confusion.
 ###############################################################################
 
 # Device is offline for maintenance
-#tor-sw-17:dell:down
+#tor-sw-17;dell;down
 
 ###############################################################################
 # IP ADDRESS EXAMPLE (DISCOURAGED BUT SUPPORTED)
@@ -96,7 +100,7 @@
 # Prefer DNS names. Use IPs only when absolutely required.
 ###############################################################################
 
-# 10.107.0.22:cisco
+# 10.107.0.22;cisco;up
 
 ###############################################################################
 # COMMENTING & ORGANIZATION
@@ -111,7 +115,7 @@
 # WHAT NOT TO DO
 # --------------
 # ❌ Do NOT include usernames or passwords
-# ❌ Do NOT include spaces around the colon separators
+# ❌ Do NOT include spaces around the semicolon separators
 # ❌ Do NOT mix role naming conventions inconsistently
 # ❌ Do NOT delete devices unless permanently decommissioned
 ###############################################################################
@@ -120,10 +124,11 @@
 # CHANGE MANAGEMENT NOTES
 # -----------------------
 # - Adding a device:
-#     Add a new line with hostname and device type.
+#     Add a new line with format: <hostname>;<device-type>;up
+#     Example: switch-01;cisco;up
 #
 # - Removing a device:
-#     Prefer ":down" first, then remove after decommission.
+#     Prefer ";down" first, then remove after decommission.
 #
 # - Moving a device between groups:
 #     Remove from old group router.db

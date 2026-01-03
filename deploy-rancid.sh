@@ -545,7 +545,7 @@ install_rancid_from_source() {
 
   # Create symlinks in /usr/bin for PATH compatibility
   log "Creating symlinks in /usr/bin..."
-  local binaries=("rancid" "rancid-run" "clogin")
+  local binaries=("rancid" "rancid-run" "clogin" "control_rancid" "rancid-fe" "par")
   for binary in "${binaries[@]}"; do
     if [[ -f "/usr/local/bin/${binary}" ]]; then
       if [[ -L "/usr/bin/${binary}" ]] || [[ -f "/usr/bin/${binary}" ]]; then
