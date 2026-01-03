@@ -3,7 +3,8 @@
 ![Status](https://img.shields.io/badge/status-operational-success.svg)
 ![Audience](https://img.shields.io/badge/audience-operators-blue.svg)
 
-This guide explains how operators use Git to review and compare network device configurations managed by RANCID. This is a **read-only workflow** focused on viewing history and changes.
+This guide explains how operators use Git to review and compare network device configurations
+managed by RANCID. This is a **read-only workflow** focused on viewing history and changes.
 
 ---
 
@@ -56,7 +57,7 @@ This guide describes how operators use Git to:
 
 RANCID maintains a single "current" config file per device in the `configs/` directory:
 
-```
+```text
 configs/
 ├── switch-1
 ├── switch-2
@@ -113,7 +114,7 @@ git status
 
 **Expected Output:**
 
-```
+```text
 On branch main
 nothing to commit, working tree clean
 ```
@@ -139,7 +140,7 @@ ls -1 configs/
 
 **Expected Output:**
 
-```
+```text
 router-core-01
 switch-1
 switch-2
@@ -175,7 +176,7 @@ git rev-list --count HEAD -- configs/switch-1
 
 **Expected Output:**
 
-```
+```text
 42
 ```
 
@@ -205,7 +206,7 @@ done
 
 **Expected Output:**
 
-```
+```text
 router-core-01: 15 revisions
 switch-1: 42 revisions
 switch-2: 28 revisions
@@ -229,7 +230,7 @@ git log --follow --date=iso -- configs/switch-1
 
 **Expected Output:**
 
-```
+```text
 commit a8c41d2f3e4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d
 Author: RANCID Automation <rancid@hostname>
 Date:   2025-12-22 02:00:01 -0500
@@ -266,7 +267,7 @@ git log --follow --date=iso --pretty=format:'%h  %ad  %s' -- configs/switch-1
 
 **Expected Output:**
 
-```
+```text
 a8c41d2  2025-12-22 02:00:01 -0500  rancid: switch-1 config change
 b91fa20  2025-12-10 02:00:01 -0500  rancid: switch-1 config change
 c72eb31  2025-11-28 02:00:01 -0500  rancid: switch-1 config change
@@ -295,7 +296,7 @@ git log --follow --stat --date=iso -- configs/switch-1
 
 **Expected Output:**
 
-```
+```text
 commit a8c41d2f3e4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d
 Date:   2025-12-22 02:00:01 -0500
 
@@ -423,7 +424,7 @@ This line tells you:
 
 #### Change Markers
 
-- **Lines starting with ` ` (space)**: Unchanged context lines (for reference)
+- **Lines starting with `` ` `` (space)**: Unchanged context lines (for reference)
 - **Lines starting with `-`**: Removed lines (present in old version, not in new)
 - **Lines starting with `+`**: Added lines (not in old version, present in new)
 
@@ -503,7 +504,7 @@ git diff --stat <old_commit> <new_commit> -- configs/switch-1
 
 **Output:**
 
-```
+```text
  configs/switch-1 | 15 insertions(+), 8 deletions(-)
 ```
 
@@ -562,7 +563,7 @@ If the most recent commit did not touch that specific file, this will show nothi
 
 #### Method 2: Compare Two Known Revision IDs (Most Reliable)
 
-**Step 1: Get the commit IDs**
+##### Step 1: Get the commit IDs
 
 ```bash
 git log --pretty=format:'%h  %ad  %s' --date=iso -- configs/switch-1
@@ -570,13 +571,13 @@ git log --pretty=format:'%h  %ad  %s' --date=iso -- configs/switch-1
 
 **Output:**
 
-```
+```text
 a8c41d2  2025-12-22 02:00:01 -0500  rancid: switch-1 config change
 b91fa20  2025-12-10 02:00:01 -0500  rancid: switch-1 config change
 c72eb31  2025-11-28 02:00:01 -0500  rancid: switch-1 config change
 ```
 
-**Step 2: Compare two specific commits**
+##### Step 2: Compare two specific commits
 
 ```bash
 git diff b91fa20 a8c41d2 -- configs/switch-1
@@ -609,7 +610,7 @@ git diff -- configs/switch-1
 
 **Expected Output (Normal Operation):**
 
-```
+```text
 (empty - no output)
 ```
 
@@ -691,7 +692,8 @@ diff -u /tmp/switch-1-before.txt configs/switch-1
 **Command:**
 
 ```bash
-git log --since="2025-12-01" --until="2025-12-31" --pretty=format:'%h  %ad  %s' --date=iso -- configs/switch-1
+git log --since="2025-12-01" --until="2025-12-31" \
+  --pretty=format:'%h  %ad  %s' --date=iso -- configs/switch-1
 ```
 
 **What This Shows:**
@@ -702,7 +704,7 @@ git log --since="2025-12-01" --until="2025-12-31" --pretty=format:'%h  %ad  %s' 
 
 **Output:**
 
-```
+```text
 a8c41d2  2025-12-22 02:00:01 -0500  rancid: switch-1 config change
 b91fa20  2025-12-10 02:00:01 -0500  rancid: switch-1 config change
 ```
@@ -759,7 +761,8 @@ index abc123..def456 100644
 git log --since="1 day ago" --pretty=format:'%h  %ad  %s' --date=iso
 
 # For each changed device, view the diff
-git log --since="1 day ago" --name-only --pretty=format:'' | sort -u | while read file; do
+git log --since="1 day ago" --name-only --pretty=format:'' | sort -u | \
+  while read file; do
   if [[ -f "$file" ]]; then
     echo "=== Changes in $file ==="
     git diff HEAD~1 HEAD -- "$file"
@@ -928,7 +931,8 @@ git log -5 --pretty=format:'%h %ad %s' --date=iso -- configs/switch-1
 
 ```bash
 # Find commit from 2 weeks ago
-COMMIT=$(git log --until="2 weeks ago" --pretty=format:'%h' -- configs/switch-1 | head -1)
+COMMIT=$(git log --until="2 weeks ago" --pretty=format:'%h' \
+  -- configs/switch-1 | head -1)
 
 # View that config
 git show $COMMIT:configs/switch-1 | less
@@ -937,7 +941,8 @@ git show $COMMIT:configs/switch-1 | less
 #### "Show me all devices that changed this week"
 
 ```bash
-git log --since="1 week ago" --name-only --pretty=format:'' | grep "^configs/" | sort -u
+git log --since="1 week ago" --name-only --pretty=format:'' | \
+  grep "^configs/" | sort -u
 ```
 
 ---
@@ -1070,11 +1075,13 @@ git log --oneline -- configs/switch-1
 **Tips:**
 
 1. **Use side-by-side view** (if available):
+
    ```bash
    git diff --word-diff <old> <new> -- configs/switch-1
    ```
 
 2. **Focus on specific sections**:
+
    ```bash
    # Extract both versions and compare manually
    git show <old>:configs/switch-1 > /tmp/old.txt
@@ -1083,6 +1090,7 @@ git log --oneline -- configs/switch-1
    ```
 
 3. **Use graphical tools** (if available):
+
    ```bash
    git difftool <old> <new> -- configs/switch-1
    ```
@@ -1116,5 +1124,3 @@ If you encounter issues not covered in this guide:
 ---
 
 **Last Updated**: 2025-01-03
-
-
