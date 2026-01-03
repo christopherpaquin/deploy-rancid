@@ -49,7 +49,8 @@ set -euo pipefail
 #############################################
 
 # Script metadata
-readonly SCRIPT_NAME="$(basename "${0}")"
+SCRIPT_NAME="$(basename "${0}")"
+readonly SCRIPT_NAME
 readonly SCRIPT_VERSION="1.0.0"
 readonly FORCE_OVERWRITE="${FORCE_OVERWRITE:-false}"
 DRY_RUN="${DRY_RUN:-false}"
@@ -67,7 +68,7 @@ CRON_LINE_DEFAULT="0 0 * * * rancid /usr/bin/rancid-run"
 # Default values for env file creation (if not already set)
 RANCID_GROUPS_DEFAULT=("routers" "switches")
 GIT_NAME_DEFAULT="RANCID Automation"
-GIT_EMAIL_DEFAULT="rancid@$(hostname -f 2>/dev/null || hostname)"
+GIT_EMAIL_DEFAULT="rancid@$(hostname -f 2> /dev/null || hostname)"
 
 #############################################
 # Utility Functions
@@ -97,7 +98,7 @@ die() {
 
 # Display usage information
 usage() {
-  cat <<EOF
+  cat << EOF
 ${SCRIPT_NAME} - RANCID Deployment Script for RHEL 10
 
 Usage:
@@ -152,15 +153,15 @@ parse_args() {
         FORCE_OVERWRITE=true
         shift
         ;;
-      --dryrun|--dry-run)
+      --dryrun | --dry-run)
         DRY_RUN=true
         shift
         ;;
-      --help|-h)
+      --help | -h)
         usage
         exit 0
         ;;
-      --version|-v)
+      --version | -v)
         version
         exit 0
         ;;
@@ -182,7 +183,7 @@ require_root() {
 
 # Check if a command exists
 command_exists() {
-  command -v "${1}" >/dev/null 2>&1
+  command -v "${1}" > /dev/null 2>&1
 }
 
 # Validate required commands are available
@@ -223,10 +224,10 @@ safe_mkdir() {
     log "Directory exists: ${dir}"
     # Check if ownership/permissions need correction
     local current_owner
-    current_owner="$(stat -c "%U:%G" "${dir}" 2>/dev/null || echo "")"
+    current_owner="$(stat -c "%U:%G" "${dir}" 2> /dev/null || echo "")"
     local current_mode
-    current_mode="$(stat -c "%a" "${dir}" 2>/dev/null || echo "")"
-    
+    current_mode="$(stat -c "%a" "${dir}" 2> /dev/null || echo "")"
+
     if [[ "${current_owner}" != "${owner}:${group}" ]] || [[ "${current_mode}" != "${mode}" ]]; then
       if [[ "${DRY_RUN}" == "true" ]]; then
         log_dryrun "Would correct directory: ${dir}"
@@ -256,7 +257,8 @@ safe_create_file() {
 
   if [[ "${DRY_RUN}" == "true" ]]; then
     if [[ -f "${file}" ]] && [[ "${force}" == "true" ]]; then
-      local backup_file="${file}.bak.$(date +%Y%m%d%H%M%S)"
+      local backup_file
+      backup_file="${file}.bak.$(date +%Y%m%d%H%M%S)"
       log_dryrun "Would backup existing file: ${file} -> ${backup_file}"
     fi
     log_dryrun "Would create file: ${file}"
@@ -267,13 +269,14 @@ safe_create_file() {
   fi
 
   if [[ -f "${file}" ]] && [[ "${force}" == "true" ]]; then
-    local backup_file="${file}.bak.$(date +%Y%m%d%H%M%S)"
+    local backup_file
+    backup_file="${file}.bak.$(date +%Y%m%d%H%M%S)"
     log "Backing up existing file to: ${backup_file}"
     cp -a "${file}" "${backup_file}" || die "Failed to backup ${file}"
   fi
 
   log "Creating file: ${file}"
-  cat > "${file}" <<EOF
+  cat > "${file}" << EOF
 ${content}
 EOF
 
@@ -350,7 +353,7 @@ load_local_env() {
   if [[ -n "${GIT_EMAIL:-}" ]]; then
     GIT_EMAIL_DEFAULT="${GIT_EMAIL}"
   elif [[ -z "${GIT_EMAIL_DEFAULT:-}" ]]; then
-    GIT_EMAIL_DEFAULT="rancid@$(hostname -f 2>/dev/null || hostname)"
+    GIT_EMAIL_DEFAULT="rancid@$(hostname -f 2> /dev/null || hostname)"
   fi
 
   # BASEDIR -> BASEDIR_DEFAULT
@@ -458,7 +461,7 @@ create_user_group() {
   log "Setting up RANCID user and group..."
 
   # Create group if it doesn't exist
-  if ! getent group "${RANCID_GROUP}" >/dev/null 2>&1; then
+  if ! getent group "${RANCID_GROUP}" > /dev/null 2>&1; then
     if [[ "${DRY_RUN}" == "true" ]]; then
       log_dryrun "Would create group: ${RANCID_GROUP}"
       log_dryrun "  Would run: groupadd ${RANCID_GROUP}"
@@ -473,7 +476,7 @@ create_user_group() {
   fi
 
   # Create user if it doesn't exist
-  if ! id -u "${RANCID_USER}" >/dev/null 2>&1; then
+  if ! id -u "${RANCID_USER}" > /dev/null 2>&1; then
     if [[ "${DRY_RUN}" == "true" ]]; then
       log_dryrun "Would create user: ${RANCID_USER} (home=${BASEDIR})"
       log_dryrun "  Would run: useradd -m -d ${BASEDIR} -s /bin/bash -g ${RANCID_GROUP} ${RANCID_USER}"
@@ -537,12 +540,12 @@ ensure_permissions() {
   local mode="${4}"
 
   if [[ ! -e "${target}" ]]; then
-    return 0  # File doesn't exist, nothing to fix
+    return 0 # File doesn't exist, nothing to fix
   fi
 
   # Check and fix ownership
   local current_owner
-  current_owner="$(stat -c "%U:%G" "${target}" 2>/dev/null || echo "")"
+  current_owner="$(stat -c "%U:%G" "${target}" 2> /dev/null || echo "")"
   if [[ "${current_owner}" != "${owner}:${group}" ]]; then
     if [[ "${DRY_RUN}" == "true" ]]; then
       log_dryrun "  Would correct ownership: ${target} (${current_owner} -> ${owner}:${group})"
@@ -554,7 +557,7 @@ ensure_permissions() {
 
   # Check and fix permissions
   local current_mode
-  current_mode="$(stat -c "%a" "${target}" 2>/dev/null || echo "")"
+  current_mode="$(stat -c "%a" "${target}" 2> /dev/null || echo "")"
   if [[ "${current_mode}" != "${mode}" ]]; then
     if [[ "${DRY_RUN}" == "true" ]]; then
       log_dryrun "  Would correct permissions: ${target} (${current_mode} -> ${mode})"
@@ -679,10 +682,10 @@ setup_ssh_key() {
   if [[ ! -f "${ssh_key}" ]]; then
     if [[ "${DRY_RUN}" == "true" ]]; then
       log_dryrun "Would generate SSH keypair for ${RANCID_USER}: ${ssh_key}"
-      log_dryrun "  Would run: sudo -u ${RANCID_USER} ssh-keygen -t ed25519 -f ${ssh_key} -N \"\" -C \"rancid@$(hostname -f 2>/dev/null || hostname)\""
+      log_dryrun "  Would run: sudo -u ${RANCID_USER} ssh-keygen -t ed25519 -f ${ssh_key} -N \"\" -C \"rancid@$(hostname -f 2> /dev/null || hostname)\""
     else
       log "Generating SSH keypair for ${RANCID_USER}: ${ssh_key}"
-      if ! sudo -u "${RANCID_USER}" ssh-keygen -t ed25519 -f "${ssh_key}" -N "" -C "rancid@$(hostname -f 2>/dev/null || hostname)" 2>/dev/null; then
+      if ! sudo -u "${RANCID_USER}" ssh-keygen -t ed25519 -f "${ssh_key}" -N "" -C "rancid@$(hostname -f 2> /dev/null || hostname)" 2> /dev/null; then
         die "Failed to generate SSH key: ${ssh_key}"
       fi
     fi
@@ -750,7 +753,7 @@ init_git_repos() {
           log_warn "Failed to set git user.email in ${dir}"
         fi
 
-        if ! sudo -u "${RANCID_USER}" git -C "${dir}" commit --allow-empty -m "Initial RANCID repository" 2>/dev/null; then
+        if ! sudo -u "${RANCID_USER}" git -C "${dir}" commit --allow-empty -m "Initial RANCID repository" 2> /dev/null; then
           log_warn "Failed to create initial commit in ${dir}"
         fi
       fi
@@ -758,8 +761,8 @@ init_git_repos() {
       log "  Git already initialized: ${dir}"
       if [[ "${DRY_RUN}" != "true" ]]; then
         # Update git config (non-fatal)
-        sudo -u "${RANCID_USER}" git -C "${dir}" config user.name "${GIT_NAME}" 2>/dev/null || true
-        sudo -u "${RANCID_USER}" git -C "${dir}" config user.email "${GIT_EMAIL}" 2>/dev/null || true
+        sudo -u "${RANCID_USER}" git -C "${dir}" config user.name "${GIT_NAME}" 2> /dev/null || true
+        sudo -u "${RANCID_USER}" git -C "${dir}" config user.email "${GIT_EMAIL}" 2> /dev/null || true
       else
         log_dryrun "    Would update git config: user.name=\"${GIT_NAME}\", user.email=\"${GIT_EMAIL}\""
       fi
@@ -818,7 +821,7 @@ post_checks() {
 
 # Display next steps to the user
 show_next_steps() {
-  cat <<EOF
+  cat << EOF
 
 ==================== NEXT STEPS ====================
 1) Populate device credentials in: ${BASEDIR}/.cloginrc

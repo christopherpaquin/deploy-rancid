@@ -5,7 +5,9 @@
 ![Shell](https://img.shields.io/badge/shell-Bash-green.svg)
 ![Status](https://img.shields.io/badge/status-production%20ready-success.svg)
 
-Automated deployment script for RANCID (Really Awesome New Cisco confIg Differ) on RHEL 10 systems. This script provides a complete, idempotent solution for installing and configuring RANCID with Git-based configuration versioning.
+Automated deployment script for RANCID (Really Awesome New Cisco confIg Differ) on RHEL 10 systems.
+This script provides a complete, idempotent solution for installing and configuring RANCID with
+Git-based configuration versioning.
 
 ---
 
@@ -28,7 +30,9 @@ Automated deployment script for RANCID (Really Awesome New Cisco confIg Differ) 
 
 ## 🎯 Overview
 
-**RANCID** (Really Awesome New Cisco confIg Differ) is a network configuration management tool that automatically collects, stores, and tracks changes to network device configurations. This deployment script automates the entire setup process on RHEL 10 systems.
+**RANCID** (Really Awesome New Cisco confIg Differ) is a network configuration management tool that
+automatically collects, stores, and tracks changes to network device configurations. This
+deployment script automates the entire setup process on RHEL 10 systems.
 
 ### Key Features
 
@@ -56,7 +60,7 @@ Automated deployment script for RANCID (Really Awesome New Cisco confIg Differ) 
 
 The deployment script follows a modular architecture with clear separation of concerns:
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                    deploy-rancid.sh                      │
 │                                                           │
@@ -88,7 +92,7 @@ The deployment script follows a modular architecture with clear separation of co
 
 ### Configuration Flow
 
-```
+```text
 .env file (optional)
     │
     ▼
@@ -145,18 +149,21 @@ The script automatically installs these packages:
 ### Quick Start
 
 1. **Clone or download the repository**:
+
    ```bash
    git clone <repository-url>
    cd deploy-rancid
    ```
 
 2. **Configure your environment** (optional):
+
    ```bash
    cp .env.example .env
    # Edit .env with your settings
    ```
 
 3. **Run the deployment script**:
+
    ```bash
    sudo ./deploy-rancid.sh
    ```
@@ -227,16 +234,19 @@ After successful installation, complete these steps:
 
 ### Environment File (`.env`)
 
-The script supports configuration via a `.env` file in the script directory. This file is **optional** - if not present, sensible defaults are used.
+The script supports configuration via a `.env` file in the script directory. This file is
+**optional** - if not present, sensible defaults are used.
 
 #### Creating Your `.env` File
 
 1. **Copy the example file**:
+
    ```bash
    cp .env.example .env
    ```
 
 2. **Edit `.env` with your values**:
+
    ```bash
    nano .env  # or vim, emacs, etc.
    ```
@@ -260,6 +270,7 @@ The script supports configuration via a `.env` file in the script directory. Thi
 The script supports **two naming conventions** for flexibility:
 
 1. **Standard format** (recommended):
+
    ```bash
    RANCID_GROUPS=("core-switches" "tor-switches" "firewalls")
    GIT_NAME="RANCID"
@@ -267,6 +278,7 @@ The script supports **two naming conventions** for flexibility:
    ```
 
 2. **DEFAULT suffix format** (also supported):
+
    ```bash
    RANCID_GROUPS_DEFAULT=("core-switches" "tor-switches" "firewalls")
    GIT_NAME_DEFAULT="RANCID"
@@ -311,7 +323,8 @@ The `.env.example` file serves as a **template** and **documentation** for confi
 
 ### Template Files
 
-The script uses template files to create initial configuration files. These templates are **copied** (not inlined) to ensure consistency:
+The script uses template files to create initial configuration files. These templates are
+**copied** (not inlined) to ensure consistency:
 
 #### `example-router.db`
 
@@ -333,7 +346,8 @@ The script uses template files to create initial configuration files. These temp
 
 ### Dry-Run Mode
 
-The script supports a `--dryrun` (or `--dry-run`) option that allows you to preview all changes without actually modifying the system:
+The script supports a `--dryrun` (or `--dry-run`) option that allows you to preview all changes
+without actually modifying the system:
 
 ```bash
 sudo ./deploy-rancid.sh --dryrun
@@ -452,7 +466,7 @@ sudo ./deploy-rancid.sh
 
 The script follows this execution sequence:
 
-```
+```text
 1. Parse Arguments
    ├─▶ Validate command-line options
    └─▶ Set FORCE_OVERWRITE flag
@@ -600,27 +614,32 @@ The script sets appropriate permissions for security:
 To remove RANCID deployment:
 
 1. **Stop cron job**:
+
    ```bash
    rm /etc/cron.d/rancid
    ```
 
 2. **Remove configuration files**:
+
    ```bash
    rm -rf /etc/rancid/
    ```
 
 3. **Remove RANCID data** (⚠️ **WARNING**: This deletes all collected configs):
+
    ```bash
    rm -rf /var/lib/rancid/
    ```
 
 4. **Remove RANCID user and group**:
+
    ```bash
    userdel rancid
    groupdel rancid
    ```
 
 5. **Uninstall packages** (optional):
+
    ```bash
    dnf remove rancid perl-Expect perl-TermReadKey net-snmp-utils
    ```
@@ -643,6 +662,7 @@ Before removing RANCID, consider backing up:
 #### Issue: "This script must be run as root"
 
 **Solution**: Run with sudo:
+
 ```bash
 sudo ./deploy-rancid.sh
 ```
@@ -650,6 +670,7 @@ sudo ./deploy-rancid.sh
 #### Issue: "Missing required commands"
 
 **Solution**: Ensure you're on RHEL 10 with dnf available:
+
 ```bash
 which dnf
 # If missing, you may not be on RHEL 10
@@ -658,6 +679,7 @@ which dnf
 #### Issue: "Failed to install EPEL repository"
 
 **Solution**: Check network connectivity and repository access:
+
 ```bash
 ping 8.8.8.8
 dnf repolist
@@ -666,6 +688,7 @@ dnf repolist
 #### Issue: "GIT_NAME is not set (check .env file or defaults)"
 
 **Solution**: Ensure `.env` file has GIT_NAME set, or the script will use defaults:
+
 ```bash
 # Check .env file
 cat .env | grep GIT_NAME
@@ -681,6 +704,7 @@ sudo ./deploy-rancid.sh
 #### Issue: "File exists: ... (skipping, use --force to overwrite)"
 
 **Solution**: This is expected behavior. Use `--force` if you want to overwrite:
+
 ```bash
 sudo ./deploy-rancid.sh --force
 ```
@@ -690,24 +714,28 @@ sudo ./deploy-rancid.sh --force
 **Solution**: Check common causes:
 
 1. **Credentials not configured**:
+
    ```bash
    cat /var/lib/rancid/.cloginrc
    # Ensure credentials are populated
    ```
 
 2. **Devices not in router.db**:
+
    ```bash
    cat /var/lib/rancid/<group>/router.db
    # Ensure devices are listed
    ```
 
 3. **SSH key not distributed**:
+
    ```bash
    cat /var/lib/rancid/.ssh/id_rancid.pub
    # Distribute to devices
    ```
 
 4. **Check logs**:
+
    ```bash
    ls -ltr /var/lib/rancid/*/logs/
    tail -f /var/lib/rancid/logs/rancid.log
@@ -718,22 +746,26 @@ sudo ./deploy-rancid.sh --force
 1. **Enable verbose output**: The script logs all operations with `[rancid-setup]` prefix
 
 2. **Check file permissions**:
+
    ```bash
    ls -la /var/lib/rancid/
    ls -la /etc/rancid/
    ```
 
 3. **Verify Git repositories**:
+
    ```bash
    sudo -u rancid git -C /var/lib/rancid/<group> status
    ```
 
 4. **Test manual collection**:
+
    ```bash
    sudo -u rancid rancid-run
    ```
 
 5. **Review cron logs**:
+
    ```bash
    journalctl -u crond | grep rancid
    ```
@@ -753,7 +785,7 @@ If issues persist:
 
 ### RANCID Documentation
 
-- **Official RANCID Website**: http://www.shrubbery.net/rancid/
+- **Official RANCID Website**: <http://www.shrubbery.net/rancid/>
 - **RANCID Manual**: `man rancid` (after installation)
 - **RANCID Configuration Guide**: `/usr/share/doc/rancid/` (after installation)
 
@@ -781,7 +813,9 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+```text
+http://www.apache.org/licenses/LICENSE-2.0
+```
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -792,4 +826,3 @@ limitations under the License.
 ---
 
 **Last Updated**: 2025-01-02
-
