@@ -77,8 +77,8 @@
 # Usage-based grouping allows multiple vendors in a single group.
 ###############################################################################
 
-mor-sw-01:dell
-mor-sw-02:cisco
+# mor-sw-01:dell
+# mor-sw-02:cisco
 
 ###############################################################################
 # TEMPORARILY DISABLED DEVICES

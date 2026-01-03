@@ -15,6 +15,8 @@ managed by RANCID. This is a **read-only workflow** focused on viewing history a
 - [📁 Example Environment](#-example-environment)
 - [🚀 Getting Started](#-getting-started)
 - [⚙️ Running RANCID Manually](#️-running-rancid-manually)
+- [📝 Viewing RANCID Logs](#-viewing-rancid-logs)
+- [⚙️ Configuration Notes](#️-configuration-notes)
 - [📊 Viewing Configuration History](#-viewing-configuration-history)
 - [🔍 Understanding Git Diffs](#-understanding-git-diffs)
 - [📈 Comparing Configurations](#-comparing-configurations)
@@ -337,6 +339,366 @@ find /var/lib/rancid -name "*.log" -exec tail -20 {} \;
 - Changes detected will be automatically committed to Git
 - Logs are written to the same location as scheduled runs
 - Running manually does not affect the scheduled cron job
+
+---
+
+## 📝 Viewing RANCID Logs
+
+RANCID writes logs to multiple locations to help track collection activities, errors, and device connectivity issues.
+
+### Log File Locations
+
+RANCID maintains logs in three main locations:
+
+#### 1. Global Log File
+
+**Location:** `/var/lib/rancid/logs/rancid.log`
+
+**Purpose:** Main log file for all RANCID operations across all groups
+
+**Configuration:** Set in `/etc/rancid/rancid.conf` via the `LOGFILE` variable
+
+**View the global log:**
+
+```bash
+# View entire log file
+cat /var/lib/rancid/logs/rancid.log
+
+# View last 50 lines
+tail -50 /var/lib/rancid/logs/rancid.log
+
+# Follow log in real-time (useful during collection)
+tail -f /var/lib/rancid/logs/rancid.log
+
+# View with timestamps and pagination
+less /var/lib/rancid/logs/rancid.log
+```
+
+#### 2. Per-Group Log Directories
+
+**Location:** `/var/lib/rancid/<group-name>/logs/`
+
+**Examples:**
+- `/var/lib/rancid/core-switches/logs/`
+- `/var/lib/rancid/firewalls/logs/`
+- `/var/lib/rancid/tor-switches/logs/`
+
+**Purpose:** Group-specific logs for detailed troubleshooting
+
+**View group logs:**
+
+```bash
+# List log files in a group directory
+ls -ltr /var/lib/rancid/core-switches/logs/
+
+# View the main log file for a group (if it exists)
+cat /var/lib/rancid/core-switches/logs/rancid.log
+
+# Follow group log in real-time
+tail -f /var/lib/rancid/core-switches/logs/rancid.log
+```
+
+#### 3. Timestamped Log Files
+
+**Location:** `/var/lib/rancid/logs/`
+
+**Format:** `<group-name>.<YYYYMMDD>.<HHMMSS>`
+
+**Examples:**
+- `core-switches.20260102.200733`
+- `firewalls.20260102.200900`
+- `tor-switches.20260102.200907`
+
+**Purpose:** Individual run logs with timestamps for each collection attempt
+
+**View timestamped logs:**
+
+```bash
+# List all timestamped logs
+ls -ltr /var/lib/rancid/logs/
+
+# View a specific timestamped log
+cat /var/lib/rancid/logs/core-switches.20260102.200733
+
+# View most recent log for a specific group
+ls -t /var/lib/rancid/logs/core-switches.* | head -1 | xargs cat
+
+# View logs from today
+ls -1 /var/lib/rancid/logs/*.$(date +%Y%m%d).*
+```
+
+### Common Log Viewing Commands
+
+#### View All Logs Across All Groups
+
+```bash
+# Find all log files
+find /var/lib/rancid -name "*.log" -type f
+
+# View last 20 lines of all log files
+find /var/lib/rancid -name "*.log" -type f -exec echo "=== {} ===" \; \
+  -exec tail -20 {} \;
+
+# View recent timestamped logs
+ls -ltr /var/lib/rancid/logs/ | tail -20
+```
+
+#### Search Logs for Specific Information
+
+```bash
+# Search for errors in global log
+grep -i error /var/lib/rancid/logs/rancid.log
+
+# Search for a specific device name
+grep "switch-1" /var/lib/rancid/logs/rancid.log
+
+# Search for connection failures
+grep -i "failed\|timeout\|connection" /var/lib/rancid/logs/rancid.log
+
+# Search across all log files
+grep -r "switch-1" /var/lib/rancid/logs/
+```
+
+#### Monitor Logs During Collection
+
+```bash
+# Follow global log during a manual run
+tail -f /var/lib/rancid/logs/rancid.log
+
+# Follow multiple log files simultaneously (requires multitail or separate terminals)
+tail -f /var/lib/rancid/logs/rancid.log /var/lib/rancid/core-switches/logs/rancid.log
+```
+
+### Understanding Log Content
+
+RANCID logs typically contain:
+
+- **Collection start/end times** for each group
+- **Device connection attempts** and results
+- **Configuration retrieval** status
+- **Git commit information** when changes are detected
+- **Error messages** for failed connections or collection issues
+- **Summary statistics** for each collection run
+
+**Example log entry:**
+
+```text
+2025-01-02 20:07:33 Starting collection for group: core-switches
+2025-01-02 20:07:35 Connecting to switch-1...
+2025-01-02 20:07:36 Successfully collected config from switch-1
+2025-01-02 20:07:37 No changes detected for switch-1
+2025-01-02 20:07:38 Connecting to switch-2...
+2025-01-02 20:07:40 Successfully collected config from switch-2
+2025-01-02 20:07:41 Changes detected for switch-2, committing to Git
+2025-01-02 20:07:42 Collection completed for group: core-switches
+```
+
+### Log File Permissions
+
+Log files and directories are owned by `rancid:rancid` with the following permissions:
+
+- **Log directories**: `750` (readable by owner and group, executable for navigation)
+- **Log files**: `644` (readable by owner and group)
+
+**Check permissions:**
+
+```bash
+ls -la /var/lib/rancid/logs/
+ls -la /var/lib/rancid/core-switches/logs/
+```
+
+### Troubleshooting with Logs
+
+**When investigating collection issues:**
+
+1. **Check the global log** for overall RANCID status:
+
+   ```bash
+   tail -100 /var/lib/rancid/logs/rancid.log
+   ```
+
+2. **Check group-specific logs** for detailed device information:
+
+   ```bash
+   tail -100 /var/lib/rancid/core-switches/logs/rancid.log
+   ```
+
+3. **Check timestamped logs** for specific run details:
+
+   ```bash
+   cat /var/lib/rancid/logs/core-switches.20260102.200733
+   ```
+
+4. **Search for errors** across all logs:
+
+   ```bash
+   grep -i error /var/lib/rancid/logs/rancid.log
+   grep -r "failed" /var/lib/rancid/*/logs/
+   ```
+
+**Common log patterns to look for:**
+
+- `Connection refused` - Device is not accepting connections
+- `Authentication failed` - Credentials are incorrect
+- `Timeout` - Device did not respond in time
+- `No changes detected` - Normal operation, config unchanged
+- `Changes detected` - Config was modified, new Git commit created
+
+---
+
+## ⚙️ Configuration Notes
+
+This section covers important configuration details that operators should be aware of when working with RANCID.
+
+### Connection Method: Telnet vs SSH
+
+**⚠️ CRITICAL SECURITY WARNING:**
+
+**Telnet should NOT be used in production environments.** Telnet transmits all
+data, including credentials, in plain text over the network, making it
+vulnerable to interception and unauthorized access.
+
+**Current Homelab Testing Configuration:**
+
+The current RANCID deployment is configured to use **telnet** for device
+connections. **This configuration is ONLY for homelab testing purposes** due
+to legacy hardware that does not support SSH. This is a temporary testing
+configuration and should never be used in production.
+
+**Why Telnet is Dangerous:**
+
+- ❌ **Credentials transmitted in plain text** - passwords can be intercepted by anyone on the network
+- ❌ **No encryption** - all configuration data is visible to network sniffers
+- ❌ **No authentication verification** - vulnerable to man-in-the-middle attacks
+- ❌ **Security policy violation** - most organizations prohibit telnet in production
+
+**Production Requirements:**
+
+- ✅ **MUST use SSH** for all device connections in production
+- ✅ **SSH is the default and secure method** - RANCID will use SSH automatically if telnet is not forced
+- ✅ **SSH encrypts all traffic** - credentials and configurations are protected
+- ✅ **SSH provides authentication** - prevents man-in-the-middle attacks
+
+**Current Homelab Configuration (Testing Only):**
+
+```bash
+# ⚠️ HOMELAB TESTING ONLY - DO NOT USE IN PRODUCTION
+# Force telnet connection method for all devices
+add method * telnet
+```
+
+**For Production Deployment:**
+
+1. **Remove the telnet configuration** from `/var/lib/rancid/.cloginrc`:
+   - Delete or comment out the line: `add method * telnet`
+
+2. **Verify SSH is available** on all network devices
+
+3. **Test SSH connectivity** before deploying RANCID:
+
+   ```bash
+   ssh -l <username> <device-ip>
+   ```
+
+4. **RANCID will automatically use SSH** once the telnet method directive is
+   removed
+
+**Connecting to Legacy Hardware (Alternative to Telnet):**
+
+If you have legacy network devices that only support older SSH encryption
+algorithms (e.g., older Cisco IOS devices), **do not use telnet**. Instead,
+configure modern RHEL and Fedora systems to use legacy crypto policies, which
+allows SSH to work with legacy devices while still maintaining encryption.
+
+**Enable Legacy Crypto Policies:**
+
+```bash
+# Set system-wide legacy crypto policy (requires root)
+sudo update-crypto-policies --set LEGACY
+
+# Verify the policy change
+update-crypto-policies --show
+```
+
+**What This Does:**
+
+- ✅ **Enables legacy SSH algorithms** - allows SSH to negotiate with devices that only support older encryption
+- ✅ **Maintains encryption** - traffic is still encrypted (unlike telnet)
+- ✅ **More secure than telnet** - provides authentication and encryption, even if using older algorithms
+- ✅ **Compatible with legacy hardware** - works with older network devices that don't support modern SSH
+
+**Important Notes:**
+
+- ⚠️ **Legacy crypto policies reduce security** - allows weaker encryption algorithms that may be vulnerable
+- ⚠️ **Use only when necessary** - only enable for systems that need to connect to legacy hardware
+- ⚠️ **Consider network isolation** - legacy devices should ideally be on isolated management networks
+- ✅ **Still better than telnet** - provides encryption and authentication, unlike plain text telnet
+
+**Reverting to Default Crypto Policy:**
+
+If you no longer need legacy crypto support:
+
+```bash
+# Restore default crypto policy
+sudo update-crypto-policies --set DEFAULT
+
+# Or use FUTURE for maximum security (if all devices support it)
+sudo update-crypto-policies --set FUTURE
+```
+
+**Configuration Location:**
+
+The connection method is configured in `/var/lib/rancid/.cloginrc` via the
+`method` directive. By default, RANCID will try SSH first, then fall back to
+telnet if SSH fails. Forcing telnet via `add method * telnet` overrides this
+secure default behavior. **Instead of forcing telnet, use legacy crypto
+policies to enable SSH with legacy devices.**
+
+### Enable Password Format
+
+When configuring device credentials in `/var/lib/rancid/.cloginrc`, devices
+requiring enable passwords must use a specific format.
+
+**Correct Format:**
+
+```bash
+add user 192.168.1.100 username
+add password 192.168.1.100 YOUR_PASSWORD YOUR_ENABLE_PASSWORD
+```
+
+**Format Explanation:**
+
+- **`add password <device> <password> <enable-password>`**: Both the login
+  password and enable password must be on the same `add password` line
+- The first password value is the login password
+- The second password value is the enable password
+- Both passwords are required on the same line for devices that need enable mode
+
+**Incorrect Format (Will Not Work):**
+
+```bash
+# ❌ DO NOT USE THIS FORMAT
+add user 192.168.1.100 username
+add password 192.168.1.100 YOUR_PASSWORD
+add enablepassword 192.168.1.100 YOUR_ENABLE_PASSWORD
+```
+
+**Why This Matters:**
+
+- `clogin` expects both passwords in a single `add password` entry
+- Separate `add enablepassword` lines are not recognized by `clogin` for enable password authentication
+- Using the incorrect format will result in errors like: `Error: no enable password for <device> in /var/lib/rancid/.cloginrc`
+
+**Example for Multiple Devices:**
+
+```bash
+# Core switches - Example Lab
+add user 192.168.1.100 username
+add password 192.168.1.100 YOUR_PASSWORD YOUR_ENABLE_PASSWORD
+
+add user 192.168.1.101 username
+add password 192.168.1.101 YOUR_PASSWORD YOUR_ENABLE_PASSWORD
+```
 
 ---
 

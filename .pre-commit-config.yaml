@@ -21,6 +21,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: false
+      - id: check-commit-message
+        name: Check Commit Message for Sensitive Information
+        entry: scripts/check-commit-message.sh
+        language: system
+        stages: [commit-msg]
+        pass_filenames: false
 
   # Python: Ruff (lint + autofix) and Ruff formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
