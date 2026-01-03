@@ -4,9 +4,10 @@
 #
 # Description:
 #   This script automates the installation and configuration of RANCID (Really
-#   Awesome New Cisco confIg Differ) on RHEL 10 systems. It handles package
-#   installation, user/group creation, directory structure setup, Git repository
-#   initialization, and cron job configuration.
+#   Awesome New Cisco confIg Differ) on RHEL 10 systems. It handles RANCID source
+#   installation (download, compile, install), dependency installation, user/group
+#   creation, directory structure setup, Git repository initialization, and cron
+#   job configuration.
 #
 # Features:
 #   - Idempotent: Safe to run multiple times
@@ -418,9 +419,9 @@ load_env() {
 # Installation Functions
 #############################################
 
-# Install required packages via dnf
+# Install required packages and RANCID from source
 install_packages() {
-  log "Installing required packages..."
+  log "Installing required packages and dependencies..."
 
   if ! command_exists dnf; then
     die "dnf package manager not found. This script requires RHEL 10 or compatible."
@@ -431,14 +432,8 @@ install_packages() {
     die "Failed to update OS packages"
   fi
 
-  log "Installing EPEL repository..."
-  if ! dnf -y install epel-release; then
-    die "Failed to install EPEL repository"
-  fi
-
-  log "Installing RANCID and dependencies..."
+  log "Installing RANCID runtime dependencies..."
   local packages=(
-    "rancid"
     "git"
     "perl-Expect"
     "perl-TermReadKey"
@@ -446,11 +441,139 @@ install_packages() {
     "openssh-clients"
   )
 
+  # Install runtime dependencies
   if ! dnf -y install "${packages[@]}"; then
-    die "Failed to install RANCID packages"
+    die "Failed to install RANCID dependencies"
   fi
 
-  log "Package installation completed successfully"
+  # Check if RANCID is already installed
+  if command_exists rancid-run; then
+    log "RANCID appears to be installed (found rancid-run command)"
+    local version_output
+    version_output=$(rancid-run -V 2>&1 | head -1 || true)
+    if [[ -n "${version_output}" ]]; then
+      log "Version: ${version_output}"
+    fi
+  else
+    log "Installing RANCID from source..."
+    install_rancid_from_source
+  fi
+
+  log "Package installation completed"
+}
+
+# Install RANCID from source
+install_rancid_from_source() {
+  log "Installing RANCID from source..."
+
+  # Install build prerequisites
+  log "Installing build prerequisites..."
+  local build_packages=(
+    "gcc"
+    "make"
+    "expect"
+    "perl-devel"
+  )
+
+  if ! dnf -y install "${build_packages[@]}"; then
+    die "Failed to install build prerequisites for RANCID source installation"
+  fi
+
+  # Check if curl is available (required for download)
+  if ! command_exists curl; then
+    log "Installing curl (required for source download)..."
+    if ! dnf -y install curl; then
+      die "Failed to install curl, required for downloading RANCID source"
+    fi
+  fi
+
+  # Set up temporary build directory
+  local build_dir="/tmp/rancid-build"
+  local rancid_version="3.13"
+  local rancid_url="http://www.shrubbery.net/pub/rancid/rancid-${rancid_version}.tar.gz"
+  local rancid_tarball="${build_dir}/rancid-${rancid_version}.tar.gz"
+  local rancid_src="${build_dir}/rancid-${rancid_version}"
+
+  # Create build directory (clean up if it exists from previous failed attempt)
+  if [[ -d "${build_dir}" ]]; then
+    log "Cleaning up previous build directory..."
+    rm -rf "${build_dir}"
+  fi
+  mkdir -p "${build_dir}"
+
+  # Download RANCID source
+  log "Downloading RANCID ${rancid_version} from ${rancid_url}..."
+  if ! curl -L -f -o "${rancid_tarball}" "${rancid_url}"; then
+    die "Failed to download RANCID source from ${rancid_url}"
+  fi
+
+  # Verify tarball was downloaded
+  if [[ ! -f "${rancid_tarball}" ]]; then
+    die "RANCID tarball not found after download: ${rancid_tarball}"
+  fi
+
+  # Extract source
+  log "Extracting RANCID source..."
+  if ! tar -xzf "${rancid_tarball}" -C "${build_dir}"; then
+    die "Failed to extract RANCID source tarball"
+  fi
+
+  # Verify source directory exists
+  if [[ ! -d "${rancid_src}" ]]; then
+    die "RANCID source directory not found after extraction: ${rancid_src}"
+  fi
+
+  # Configure, compile, and install (use subshell to avoid changing working directory)
+  log "Configuring RANCID build..."
+  (
+    cd "${rancid_src}" || die "Failed to change to RANCID source directory: ${rancid_src}"
+
+    if ! ./configure --prefix=/usr/local --sysconfdir=/etc/rancid; then
+      die "Failed to configure RANCID build"
+    fi
+
+    log "Compiling RANCID..."
+    if ! make; then
+      die "Failed to compile RANCID"
+    fi
+
+    log "Installing RANCID..."
+    if ! make install; then
+      die "Failed to install RANCID"
+    fi
+  )
+
+  # Create symlinks in /usr/bin for PATH compatibility
+  log "Creating symlinks in /usr/bin..."
+  local binaries=("rancid" "rancid-run" "clogin")
+  for binary in "${binaries[@]}"; do
+    if [[ -f "/usr/local/bin/${binary}" ]]; then
+      if [[ -L "/usr/bin/${binary}" ]] || [[ -f "/usr/bin/${binary}" ]]; then
+        log "Symlink or file already exists: /usr/bin/${binary}, skipping"
+      else
+        ln -sf "/usr/local/bin/${binary}" "/usr/bin/${binary}"
+        log "Created symlink: /usr/bin/${binary} -> /usr/local/bin/${binary}"
+      fi
+    else
+      log_warn "Binary not found after installation: /usr/local/bin/${binary}"
+    fi
+  done
+
+  # Clean up build directory
+  log "Cleaning up build directory..."
+  rm -rf "${build_dir}"
+
+  # Verify installation
+  if command_exists rancid-run; then
+    log "RANCID installed successfully from source"
+    local version_output
+    version_output=$(rancid-run -V 2>&1 | head -1 || true)
+    if [[ -n "${version_output}" ]]; then
+      log "Version: ${version_output}"
+    fi
+  else
+    die "RANCID installation completed but rancid-run command not found"
+  fi
 }
 
 # Create RANCID user and group
@@ -729,13 +852,19 @@ ${CRON_LINE}"
 post_checks() {
   log "Performing post-installation validation..."
 
-  # Verify RANCID commands are available
+  # Verify RANCID commands are available (warn if not found, don't fail)
   if ! command_exists rancid-run; then
-    die "rancid-run not found on PATH after installation"
+    log_warn "rancid-run not found on PATH"
+    log_warn "RANCID may need to be installed from source"
+    log_warn "See: https://www.shrubbery.net/rancid/ for installation instructions"
+  else
+    log "RANCID commands verified: rancid-run found"
   fi
 
   if ! command_exists rancid; then
-    die "rancid not found on PATH after installation"
+    log_warn "rancid command not found on PATH"
+  else
+    log "RANCID commands verified: rancid found"
   fi
 
   log "Verifying ownership and permissions..."

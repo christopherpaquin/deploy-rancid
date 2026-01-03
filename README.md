@@ -46,7 +46,9 @@ deployment script automates the entire setup process on RHEL 10 systems.
 
 ### What Gets Installed
 
-- RANCID package and dependencies
+- RANCID (compiled and installed from source)
+- Build tools and dependencies (gcc, make, expect, perl-devel)
+- Runtime dependencies (git, perl-Expect, perl-TermReadKey, net-snmp-utils, openssh-clients)
 - RANCID user and group
 - Directory structure for device groups
 - Git repositories for configuration versioning
@@ -118,21 +120,25 @@ deploy-rancid.sh
 - **Operating System**: RHEL 10 (or compatible)
 - **Architecture**: x86_64
 - **Privileges**: Root access (via `sudo` or direct root login)
-- **Network**: Internet access for package installation
+- **Network**: Internet access for downloading RANCID source and dependencies
 
 ### Software Dependencies
 
-The script automatically installs these packages:
+The script automatically installs these packages and builds RANCID from source:
 
 | Package | Purpose | Status |
 |---------|---------|--------|
-| `rancid` | Main RANCID application | ✅ Required |
+| `rancid` | Main RANCID application (installed from source) | ✅ Required |
+| `gcc` | C compiler for building RANCID | ✅ Required |
+| `make` | Build tool for compiling RANCID | ✅ Required |
+| `expect` | Tcl expect (required by RANCID configure) | ✅ Required |
+| `perl-devel` | Perl development headers | ✅ Required |
+| `curl` | Download tool for RANCID source | ✅ Required |
 | `git` | Version control for configs | ✅ Required |
 | `perl-Expect` | Device interaction | ✅ Required |
 | `perl-TermReadKey` | Terminal input handling | ✅ Required |
 | `net-snmp-utils` | SNMP utilities | ✅ Required |
 | `openssh-clients` | SSH client tools | ✅ Required |
-| `epel-release` | EPEL repository | ✅ Required |
 
 ### Pre-Installation Checklist
 
@@ -357,7 +363,7 @@ sudo ./deploy-rancid.sh --dryrun
 - ✅ Directories that would be created
 - ✅ Files that would be created or modified
 - ✅ Ownership and permission changes
-- ✅ Package installation commands
+- ✅ Source installation and build commands
 - ✅ User/group creation operations
 - ✅ Git repository initialization steps
 
@@ -482,8 +488,12 @@ The script follows this execution sequence:
 
 4. Package Installation
    ├─▶ Update system packages
-   ├─▶ Install EPEL repository
-   └─▶ Install RANCID and dependencies
+   ├─▶ Install runtime dependencies
+   └─▶ Install RANCID from source (if not already installed)
+       ├─▶ Install build prerequisites
+       ├─▶ Download RANCID source
+       ├─▶ Configure, compile, and install
+       └─▶ Create symlinks in /usr/bin
 
 5. User/Group Setup
    ├─▶ Create rancid group (if needed)
@@ -522,7 +532,8 @@ The script follows this execution sequence:
 
 #### Installation Functions
 
-- **`install_packages()`**: Installs RANCID and dependencies via dnf
+- **`install_packages()`**: Installs runtime dependencies and RANCID from source
+- **`install_rancid_from_source()`**: Downloads, compiles, and installs RANCID from source
 - **`create_user_group()`**: Creates rancid user and group
 - **`create_base_dirs()`**: Sets up directory structure
 - **`write_rancid_conf()`**: Writes main RANCID configuration
@@ -638,10 +649,17 @@ To remove RANCID deployment:
    groupdel rancid
    ```
 
-5. **Uninstall packages** (optional):
+5. **Uninstall RANCID binaries** (optional):
 
    ```bash
-   dnf remove rancid perl-Expect perl-TermReadKey net-snmp-utils
+   # Remove symlinks
+   rm -f /usr/bin/rancid /usr/bin/rancid-run /usr/bin/clogin
+
+   # Remove RANCID installation
+   rm -rf /usr/local/bin/rancid* /usr/local/bin/clogin* /usr/local/share/rancid
+
+   # Remove runtime dependencies (optional, if not used elsewhere)
+   dnf remove perl-Expect perl-TermReadKey net-snmp-utils
    ```
 
 ### Backup Before Uninstallation
@@ -676,13 +694,13 @@ which dnf
 # If missing, you may not be on RHEL 10
 ```
 
-#### Issue: "Failed to install EPEL repository"
+#### Issue: "Failed to download RANCID source"
 
-**Solution**: Check network connectivity and repository access:
+**Solution**: Check network connectivity and DNS resolution:
 
 ```bash
 ping 8.8.8.8
-dnf repolist
+curl -I http://www.shrubbery.net/pub/rancid/
 ```
 
 #### Issue: "GIT_NAME is not set (check .env file or defaults)"

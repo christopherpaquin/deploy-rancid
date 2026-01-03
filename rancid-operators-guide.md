@@ -14,6 +14,7 @@ managed by RANCID. This is a **read-only workflow** focused on viewing history a
 - [🔑 Key Concepts](#-key-concepts)
 - [📁 Example Environment](#-example-environment)
 - [🚀 Getting Started](#-getting-started)
+- [⚙️ Running RANCID Manually](#️-running-rancid-manually)
 - [📊 Viewing Configuration History](#-viewing-configuration-history)
 - [🔍 Understanding Git Diffs](#-understanding-git-diffs)
 - [📈 Comparing Configurations](#-comparing-configurations)
@@ -162,9 +163,186 @@ This shows file sizes and modification times, which can help identify recently u
 
 ---
 
+## ⚙️ Running RANCID Manually
+
+### C. Locate RANCID Cron Job
+
+**Command:**
+
+```bash
+cat /etc/cron.d/rancid
+```
+
+**Expected Output:**
+
+```text
+# RANCID nightly configuration backup
+0 0 * * * rancid /usr/bin/rancid-run
+```
+
+**What This Shows:**
+
+- **Schedule**: `0 0 * * *` means daily at midnight (00:00)
+- **User**: Runs as the `rancid` user
+- **Command**: `/usr/bin/rancid-run` is executed
+
+**Alternative Methods to Check Cron:**
+
+```bash
+# Check if cron service is running
+systemctl status crond
+
+# View cron logs for RANCID
+journalctl -u crond | grep rancid
+
+# List all cron jobs (if using crontab instead of cron.d)
+crontab -l -u rancid
+```
+
+**Understanding the Schedule:**
+
+- `0 0 * * *` = Every day at 00:00 (midnight)
+- The cron job runs automatically - no manual intervention needed
+- RANCID will collect configurations from all devices in all groups
+
+### D. Manually Run RANCID Collection
+
+Sometimes you may need to force an immediate collection instead of waiting for the scheduled cron job.
+
+#### Run for All Groups
+
+**Command:**
+
+```bash
+sudo -u rancid rancid-run
+```
+
+**What This Does:**
+
+- Runs RANCID collection for **all configured groups**
+- Uses the same command the cron job executes
+- Must run as the `rancid` user (use `sudo -u rancid`)
+- Will collect configurations from all devices in all groups
+
+**Expected Behavior:**
+
+- RANCID connects to each device listed in `router.db` files
+- Retrieves current configuration
+- Compares to last stored version
+- If changes detected, commits new revision to Git
+- Updates logs in `logs/` directory
+
+**When to Use:**
+
+- ✅ Testing after adding new devices
+- ✅ Verifying credentials are working
+- ✅ Forcing immediate collection after configuration changes
+- ✅ Troubleshooting collection issues
+- ✅ After updating `.cloginrc` credentials
+
+#### Run for a Specific Group
+
+**Command:**
+
+```bash
+sudo -u rancid rancid-run <group-name>
+```
+
+**Examples:**
+
+```bash
+# Collect only from core-switches group
+sudo -u rancid rancid-run core-switches
+
+# Collect only from firewalls group
+sudo -u rancid rancid-run firewalls
+
+# Collect from multiple specific groups
+sudo -u rancid rancid-run core-switches tor-switches
+```
+
+**What This Does:**
+
+- Runs collection only for the specified group(s)
+- Faster than running all groups
+- Useful for targeted testing or troubleshooting
+
+**When to Use:**
+
+- ✅ Testing a specific group after changes
+- ✅ Troubleshooting issues with one group
+- ✅ Quick collection for a subset of devices
+- ✅ Verifying credentials for specific device types
+
+#### Run for a Specific Device
+
+**Command:**
+
+```bash
+sudo -u rancid rancid <group-name> <device-name>
+```
+
+**Example:**
+
+```bash
+# Collect config from switch-1 in core-switches group
+sudo -u rancid rancid core-switches switch-1
+```
+
+**What This Does:**
+
+- Collects configuration from a single device
+- Fastest option for testing one device
+- Useful for immediate verification
+
+**When to Use:**
+
+- ✅ Testing connectivity to a new device
+- ✅ Verifying credentials for one device
+- ✅ Quick check after device configuration change
+- ✅ Troubleshooting specific device issues
+
+#### Viewing Collection Output
+
+**Command:**
+
+```bash
+# Run with verbose output to see progress
+sudo -u rancid rancid-run -V
+
+# Or for a specific group
+sudo -u rancid rancid-run -V core-switches
+```
+
+**What This Shows:**
+
+- Progress of collection
+- Which devices are being processed
+- Any errors or warnings
+- Collection statistics
+
+**Check Logs After Running:**
+
+```bash
+# View recent logs for a group
+tail -f /var/lib/rancid/<group-name>/logs/rancid.log
+
+# View logs for all groups
+find /var/lib/rancid -name "*.log" -exec tail -20 {} \;
+```
+
+**Important Notes:**
+
+- Manual runs use the same credentials and configuration as scheduled runs
+- Changes detected will be automatically committed to Git
+- Logs are written to the same location as scheduled runs
+- Running manually does not affect the scheduled cron job
+
+---
+
 ## 📊 Viewing Configuration History
 
-### C. See How Many Revisions Exist for Each Device
+### E. See How Many Revisions Exist for Each Device
 
 #### Method 1: Count Revisions for a Single Device
 
@@ -218,7 +396,7 @@ switch-2: 28 revisions
 - Helps identify which devices have the most change activity
 - Useful for capacity planning and monitoring
 
-### D. View the Revision History (Timeline) for Each Device
+### F. View the Revision History (Timeline) for Each Device
 
 #### Basic History View
 
@@ -318,7 +496,7 @@ Date:   2025-12-10 02:00:01 -0500
 - **Change magnitude**: Helps identify major vs. minor changes
 - **Quick assessment**: Large changes (100+ lines) may need more careful review
 
-### E. View the Current (Latest) Config as Stored by RANCID
+### G. View the Current (Latest) Config as Stored by RANCID
 
 **Command:**
 
@@ -518,7 +696,7 @@ git diff --stat <old_commit> <new_commit> -- configs/switch-1
 
 ## 📈 Comparing Configurations
 
-### F. Compare Two Revisions of a Device Config
+### H. Compare Two Revisions of a Device Config
 
 There are several ways to compare configurations, depending on what you need.
 
@@ -644,7 +822,7 @@ git diff <commit_hash> HEAD -- configs/switch-1
 - ✅ Comparing current state to a specific point in time
 - ✅ Reviewing changes over a time period
 
-### G. Extract (Print) the Config From a Specific Revision
+### I. Extract (Print) the Config From a Specific Revision
 
 **Command:**
 
@@ -687,7 +865,7 @@ git show b91fa20:configs/switch-1 > /tmp/switch-1-before.txt
 diff -u /tmp/switch-1-before.txt configs/switch-1
 ```
 
-### H. View Changes in a Specific Time Range
+### J. View Changes in a Specific Time Range
 
 **Command:**
 
@@ -709,7 +887,7 @@ a8c41d2  2025-12-22 02:00:01 -0500  rancid: switch-1 config change
 b91fa20  2025-12-10 02:00:01 -0500  rancid: switch-1 config change
 ```
 
-### I. Find When a Specific Configuration Line Was Added or Changed
+### K. Find When a Specific Configuration Line Was Added or Changed
 
 **Command:**
 
