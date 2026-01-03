@@ -10,7 +10,7 @@
 #
 # Features:
 #   - Idempotent: Safe to run multiple times
-#   - Configurable via .env file (or uses defaults)
+#   - Configurable via .env file or /etc/rancid/rancid.env
 #   - Preserves existing files unless --force is used
 #   - Comprehensive error checking and validation
 #
@@ -53,13 +53,13 @@ SCRIPT_NAME="$(basename "${0}")"
 readonly SCRIPT_NAME
 readonly SCRIPT_VERSION="1.0.0"
 readonly FORCE_OVERWRITE="${FORCE_OVERWRITE:-false}"
-DRY_RUN="${DRY_RUN:-false}"
 
 # RANCID user and group
 readonly RANCID_USER="rancid"
 readonly RANCID_GROUP="rancid"
 
 # Default paths (can be overridden via .env file)
+ENV_FILE_DEFAULT="/etc/rancid/rancid.env"
 BASEDIR_DEFAULT="/var/lib/rancid"
 ETCDIR_DEFAULT="/etc/rancid"
 CRON_FILE_DEFAULT="/etc/cron.d/rancid"
@@ -87,10 +87,6 @@ log_error() {
   echo "[rancid-setup] ERROR: $*" >&2
 }
 
-log_dryrun() {
-  echo "[rancid-setup] [DRY-RUN] $*"
-}
-
 die() {
   log_error "$*"
   exit 1
@@ -106,7 +102,6 @@ Usage:
 
 Options:
   --force     Overwrite existing configuration files (default: preserve)
-  --dryrun    Show what would be done without making changes
   --help      Display this help message and exit
   --version   Display version information and exit
 
@@ -118,14 +113,11 @@ Description:
 Configuration:
   The script reads configuration from:
   1. .env file in the script directory (if present)
-  2. Hardcoded defaults (if .env is not present)
+  2. /etc/rancid/rancid.env (created if missing)
 
 Examples:
   # Standard installation (preserves existing files)
   sudo ${SCRIPT_NAME}
-
-  # Preview changes without executing (dry-run)
-  sudo ${SCRIPT_NAME} --dryrun
 
   # Force overwrite of existing configuration
   sudo ${SCRIPT_NAME} --force
@@ -151,10 +143,6 @@ parse_args() {
     case "${1}" in
       --force)
         FORCE_OVERWRITE=true
-        shift
-        ;;
-      --dryrun | --dry-run)
-        DRY_RUN=true
         shift
         ;;
       --help | -h)
@@ -210,35 +198,14 @@ safe_mkdir() {
   local mode="${4:-755}"
 
   if [[ ! -d "${dir}" ]]; then
-    if [[ "${DRY_RUN}" == "true" ]]; then
-      log_dryrun "Would create directory: ${dir}"
-      log_dryrun "  Would set ownership: ${owner}:${group}"
-      log_dryrun "  Would set permissions: ${mode}"
-    else
-      log "Creating directory: ${dir}"
-      mkdir -p "${dir}" || die "Failed to create directory: ${dir}"
-      chown "${owner}:${group}" "${dir}" || die "Failed to set ownership on ${dir}"
-      chmod "${mode}" "${dir}" || die "Failed to set permissions on ${dir}"
-    fi
+    log "Creating directory: ${dir}"
+    mkdir -p "${dir}" || die "Failed to create directory: ${dir}"
   else
     log "Directory exists: ${dir}"
-    # Check if ownership/permissions need correction
-    local current_owner
-    current_owner="$(stat -c "%U:%G" "${dir}" 2> /dev/null || echo "")"
-    local current_mode
-    current_mode="$(stat -c "%a" "${dir}" 2> /dev/null || echo "")"
-
-    if [[ "${current_owner}" != "${owner}:${group}" ]] || [[ "${current_mode}" != "${mode}" ]]; then
-      if [[ "${DRY_RUN}" == "true" ]]; then
-        log_dryrun "Would correct directory: ${dir}"
-        [[ "${current_owner}" != "${owner}:${group}" ]] && log_dryrun "  Would change ownership: ${current_owner} -> ${owner}:${group}"
-        [[ "${current_mode}" != "${mode}" ]] && log_dryrun "  Would change permissions: ${current_mode} -> ${mode}"
-      else
-        chown "${owner}:${group}" "${dir}" || die "Failed to set ownership on ${dir}"
-        chmod "${mode}" "${dir}" || die "Failed to set permissions on ${dir}"
-      fi
-    fi
   fi
+
+  chown "${owner}:${group}" "${dir}" || die "Failed to set ownership on ${dir}"
+  chmod "${mode}" "${dir}" || die "Failed to set permissions on ${dir}"
 }
 
 # Safely create file with backup if it exists
@@ -252,19 +219,6 @@ safe_create_file() {
 
   if [[ -f "${file}" ]] && [[ "${force}" != "true" ]]; then
     log "File exists: ${file} (skipping, use --force to overwrite)"
-    return 0
-  fi
-
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    if [[ -f "${file}" ]] && [[ "${force}" == "true" ]]; then
-      local backup_file
-      backup_file="${file}.bak.$(date +%Y%m%d%H%M%S)"
-      log_dryrun "Would backup existing file: ${file} -> ${backup_file}"
-    fi
-    log_dryrun "Would create file: ${file}"
-    log_dryrun "  Would set ownership: ${owner}:${group}"
-    log_dryrun "  Would set permissions: ${mode}"
-    log_dryrun "  File size: $(echo -n "${content}" | wc -c) bytes"
     return 0
   fi
 
@@ -379,34 +333,85 @@ load_local_env() {
   log "Configuration loaded from .env file"
 }
 
-# Validate and set final environment variables from loaded defaults
-validate_and_set_env() {
-  log "Validating environment configuration..."
+# Ensure /etc/rancid/rancid.env exists, create if missing
+ensure_env_file() {
+  log "Ensuring environment file exists: ${ENV_FILE_DEFAULT}"
 
-  # Map _DEFAULT variables to final variable names used by the script
-  RANCID_GROUPS=("${RANCID_GROUPS_DEFAULT[@]}")
-  GIT_NAME="${GIT_NAME_DEFAULT}"
-  GIT_EMAIL="${GIT_EMAIL_DEFAULT}"
-  BASEDIR="${BASEDIR_DEFAULT}"
-  ETCDIR="${ETCDIR_DEFAULT}"
-  CRON_FILE="${CRON_FILE_DEFAULT}"
-  CRON_LINE="${CRON_LINE_DEFAULT}"
+  # Create ETCDIR first so we can place env file
+  safe_mkdir "${ETCDIR_DEFAULT}" "root" "root" "755"
+
+  if [[ -f "${ENV_FILE_DEFAULT}" ]] && [[ "${FORCE_OVERWRITE}" != "true" ]]; then
+    log "Using existing env file: ${ENV_FILE_DEFAULT}"
+    return 0
+  fi
+
+  if [[ -f "${ENV_FILE_DEFAULT}" ]] && [[ "${FORCE_OVERWRITE}" == "true" ]]; then
+    log "Overwriting existing env file (--force specified)"
+  else
+    log "Creating ${ENV_FILE_DEFAULT} (was missing)..."
+  fi
+
+  # Format array as space-separated string for easier sourcing
+  local groups_str
+  groups_str="$(printf "%s " "${RANCID_GROUPS_DEFAULT[@]}")"
+  groups_str="${groups_str%% }"
+
+  local env_content
+  env_content="# /etc/rancid/rancid.env
+# RANCID environment configuration (sourced by installer)
+# IMPORTANT: This file is shell-sourced. Keep it trusted and root-writable only.
+
+# RANCID_GROUPS: Space-separated list of group names
+RANCID_GROUPS=(${groups_str})
+
+GIT_NAME=\"${GIT_NAME_DEFAULT}\"
+GIT_EMAIL=\"${GIT_EMAIL_DEFAULT}\"
+
+BASEDIR=\"${BASEDIR_DEFAULT}\"
+ETCDIR=\"${ETCDIR_DEFAULT}\"
+
+CRON_FILE=\"${CRON_FILE_DEFAULT}\"
+CRON_LINE=\"${CRON_LINE_DEFAULT}\""
+
+  safe_create_file "${ENV_FILE_DEFAULT}" "${env_content}" "root" "root" "640" "${FORCE_OVERWRITE}"
+}
+
+# Load environment from /etc/rancid/rancid.env and validate
+load_env() {
+  log "Loading environment from: ${ENV_FILE_DEFAULT}"
+
+  if [[ ! -f "${ENV_FILE_DEFAULT}" ]]; then
+    die "Environment file not found: ${ENV_FILE_DEFAULT}"
+  fi
+
+  if [[ ! -r "${ENV_FILE_DEFAULT}" ]]; then
+    die "Environment file is not readable: ${ENV_FILE_DEFAULT}"
+  fi
+
+  # Temporarily disable strict mode for sourcing
+  set +u
+  # shellcheck source=/dev/null
+  if ! source "${ENV_FILE_DEFAULT}"; then
+    set -u
+    die "Failed to source ${ENV_FILE_DEFAULT}"
+  fi
+  set -u
 
   # Validate required variables are set
-  [[ -n "${GIT_NAME:-}" ]] || die "GIT_NAME is not set (check .env file or defaults)"
-  [[ -n "${GIT_EMAIL:-}" ]] || die "GIT_EMAIL is not set (check .env file or defaults)"
-  [[ -n "${BASEDIR:-}" ]] || die "BASEDIR is not set (check .env file or defaults)"
-  [[ -n "${ETCDIR:-}" ]] || die "ETCDIR is not set (check .env file or defaults)"
-  [[ -n "${CRON_FILE:-}" ]] || die "CRON_FILE is not set (check .env file or defaults)"
-  [[ -n "${CRON_LINE:-}" ]] || die "CRON_LINE is not set (check .env file or defaults)"
-  [[ "${#RANCID_GROUPS[@]}" -gt 0 ]] || die "RANCID_GROUPS is empty (check .env file or defaults)"
+  [[ -n "${GIT_NAME:-}" ]] || die "GIT_NAME is not set in ${ENV_FILE_DEFAULT}"
+  [[ -n "${GIT_EMAIL:-}" ]] || die "GIT_EMAIL is not set in ${ENV_FILE_DEFAULT}"
+  [[ -n "${BASEDIR:-}" ]] || die "BASEDIR is not set in ${ENV_FILE_DEFAULT}"
+  [[ -n "${ETCDIR:-}" ]] || die "ETCDIR is not set in ${ENV_FILE_DEFAULT}"
+  [[ -n "${CRON_FILE:-}" ]] || die "CRON_FILE is not set in ${ENV_FILE_DEFAULT}"
+  [[ -n "${CRON_LINE:-}" ]] || die "CRON_LINE is not set in ${ENV_FILE_DEFAULT}"
+  [[ "${#RANCID_GROUPS[@]}" -gt 0 ]] || die "RANCID_GROUPS is empty in ${ENV_FILE_DEFAULT}"
 
   # Validate paths are absolute
   [[ "${BASEDIR}" =~ ^/ ]] || die "BASEDIR must be an absolute path: ${BASEDIR}"
   [[ "${ETCDIR}" =~ ^/ ]] || die "ETCDIR must be an absolute path: ${ETCDIR}"
   [[ "${CRON_FILE}" =~ ^/ ]] || die "CRON_FILE must be an absolute path: ${CRON_FILE}"
 
-  log "Environment validated successfully"
+  log "Environment loaded and validated successfully"
 }
 
 #############################################
@@ -415,14 +420,6 @@ validate_and_set_env() {
 
 # Install required packages via dnf
 install_packages() {
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    log_dryrun "Would install required packages..."
-    log_dryrun "  Would run: dnf -y update"
-    log_dryrun "  Would run: dnf -y install epel-release"
-    log_dryrun "  Would run: dnf -y install rancid git perl-Expect perl-TermReadKey net-snmp-utils openssh-clients"
-    return 0
-  fi
-
   log "Installing required packages..."
 
   if ! command_exists dnf; then
@@ -462,14 +459,9 @@ create_user_group() {
 
   # Create group if it doesn't exist
   if ! getent group "${RANCID_GROUP}" > /dev/null 2>&1; then
-    if [[ "${DRY_RUN}" == "true" ]]; then
-      log_dryrun "Would create group: ${RANCID_GROUP}"
-      log_dryrun "  Would run: groupadd ${RANCID_GROUP}"
-    else
-      log "Creating group: ${RANCID_GROUP}"
-      if ! groupadd "${RANCID_GROUP}"; then
-        die "Failed to create group: ${RANCID_GROUP}"
-      fi
+    log "Creating group: ${RANCID_GROUP}"
+    if ! groupadd "${RANCID_GROUP}"; then
+      die "Failed to create group: ${RANCID_GROUP}"
     fi
   else
     log "Group exists: ${RANCID_GROUP}"
@@ -477,16 +469,11 @@ create_user_group() {
 
   # Create user if it doesn't exist
   if ! id -u "${RANCID_USER}" > /dev/null 2>&1; then
-    if [[ "${DRY_RUN}" == "true" ]]; then
-      log_dryrun "Would create user: ${RANCID_USER} (home=${BASEDIR})"
-      log_dryrun "  Would run: useradd -m -d ${BASEDIR} -s /bin/bash -g ${RANCID_GROUP} ${RANCID_USER}"
-    else
-      log "Creating user: ${RANCID_USER} (home=${BASEDIR})"
-      if ! useradd -m -d "${BASEDIR}" -s /bin/bash -g "${RANCID_GROUP}" "${RANCID_USER}"; then
-        die "Failed to create user: ${RANCID_USER}"
-      fi
-      log "NOTE: User created without a password. Set one if interactive login is required: passwd ${RANCID_USER}"
+    log "Creating user: ${RANCID_USER} (home=${BASEDIR})"
+    if ! useradd -m -d "${BASEDIR}" -s /bin/bash -g "${RANCID_GROUP}" "${RANCID_USER}"; then
+      die "Failed to create user: ${RANCID_USER}"
     fi
+    log "NOTE: User created without a password. Set one if interactive login is required: passwd ${RANCID_USER}"
   else
     log "User exists: ${RANCID_USER}"
     # Verify home directory matches expected value
@@ -547,24 +534,16 @@ ensure_permissions() {
   local current_owner
   current_owner="$(stat -c "%U:%G" "${target}" 2> /dev/null || echo "")"
   if [[ "${current_owner}" != "${owner}:${group}" ]]; then
-    if [[ "${DRY_RUN}" == "true" ]]; then
-      log_dryrun "  Would correct ownership: ${target} (${current_owner} -> ${owner}:${group})"
-    else
-      log "  Correcting ownership: ${target} (${current_owner} -> ${owner}:${group})"
-      chown "${owner}:${group}" "${target}" || die "Failed to set ownership on ${target}"
-    fi
+    log "  Correcting ownership: ${target} (${current_owner} -> ${owner}:${group})"
+    chown "${owner}:${group}" "${target}" || die "Failed to set ownership on ${target}"
   fi
 
   # Check and fix permissions
   local current_mode
   current_mode="$(stat -c "%a" "${target}" 2> /dev/null || echo "")"
   if [[ "${current_mode}" != "${mode}" ]]; then
-    if [[ "${DRY_RUN}" == "true" ]]; then
-      log_dryrun "  Would correct permissions: ${target} (${current_mode} -> ${mode})"
-    else
-      log "  Correcting permissions: ${target} (${current_mode} -> ${mode})"
-      chmod "${mode}" "${target}" || die "Failed to set permissions on ${target}"
-    fi
+    log "  Correcting permissions: ${target} (${current_mode} -> ${mode})"
+    chmod "${mode}" "${target}" || die "Failed to set permissions on ${target}"
   fi
 }
 
@@ -608,19 +587,12 @@ create_groups_layout() {
     # Create router.db from example-router.db template (never overwrite existing)
     local router_db="${group_dir}/router.db"
     if [[ ! -f "${router_db}" ]]; then
-      if [[ "${DRY_RUN}" == "true" ]]; then
-        log_dryrun "  Would create router.db from template: ${router_db}"
-        log_dryrun "    Source: ${example_router_db}"
-        log_dryrun "    Would set ownership: ${RANCID_USER}:${RANCID_GROUP}"
-        log_dryrun "    Would set permissions: 640"
-      else
-        log "  Creating router.db from template: ${router_db}"
-        if ! cp "${example_router_db}" "${router_db}"; then
-          die "Failed to copy ${example_router_db} to ${router_db}"
-        fi
-        chown "${RANCID_USER}:${RANCID_GROUP}" "${router_db}" || die "Failed to set ownership on ${router_db}"
-        chmod 640 "${router_db}" || die "Failed to set permissions on ${router_db}"
+      log "  Creating router.db from template: ${router_db}"
+      if ! cp "${example_router_db}" "${router_db}"; then
+        die "Failed to copy ${example_router_db} to ${router_db}"
       fi
+      chown "${RANCID_USER}:${RANCID_GROUP}" "${router_db}" || die "Failed to set ownership on ${router_db}"
+      chmod 640 "${router_db}" || die "Failed to set permissions on ${router_db}"
     else
       log "  router.db exists: ${router_db} (preserving, correcting permissions if needed)"
       # Correct ownership/permissions if incorrect (idempotent)
@@ -652,19 +624,13 @@ setup_cloginrc_placeholder() {
     # Correct ownership/permissions if incorrect (idempotent)
     ensure_permissions "${cloginrc}" "${RANCID_USER}" "${RANCID_GROUP}" "600"
   else
-    if [[ "${DRY_RUN}" == "true" ]]; then
-      log_dryrun "Would create ${cloginrc} from template: ${example_cloginrc}"
-      log_dryrun "  Would set ownership: ${RANCID_USER}:${RANCID_GROUP}"
-      log_dryrun "  Would set permissions: 600"
-    else
-      log "Creating ${cloginrc} from template: ${example_cloginrc}"
-      if ! cp "${example_cloginrc}" "${cloginrc}"; then
-        die "Failed to copy ${example_cloginrc} to ${cloginrc}"
-      fi
-      chown "${RANCID_USER}:${RANCID_GROUP}" "${cloginrc}" || die "Failed to set ownership on ${cloginrc}"
-      chmod 600 "${cloginrc}" || die "Failed to set permissions on ${cloginrc}"
-      log "NOTE: Populate credentials in ${cloginrc} before running RANCID collection"
+    log "Creating ${cloginrc} from template: ${example_cloginrc}"
+    if ! cp "${example_cloginrc}" "${cloginrc}"; then
+      die "Failed to copy ${example_cloginrc} to ${cloginrc}"
     fi
+    chown "${RANCID_USER}:${RANCID_GROUP}" "${cloginrc}" || die "Failed to set ownership on ${cloginrc}"
+    chmod 600 "${cloginrc}" || die "Failed to set permissions on ${cloginrc}"
+    log "NOTE: Populate credentials in ${cloginrc} before running RANCID collection"
   fi
 }
 
@@ -680,38 +646,23 @@ setup_ssh_key() {
 
   # Generate SSH key if it doesn't exist
   if [[ ! -f "${ssh_key}" ]]; then
-    if [[ "${DRY_RUN}" == "true" ]]; then
-      log_dryrun "Would generate SSH keypair for ${RANCID_USER}: ${ssh_key}"
-      log_dryrun "  Would run: sudo -u ${RANCID_USER} ssh-keygen -t ed25519 -f ${ssh_key} -N \"\" -C \"rancid@$(hostname -f 2> /dev/null || hostname)\""
-    else
-      log "Generating SSH keypair for ${RANCID_USER}: ${ssh_key}"
-      if ! sudo -u "${RANCID_USER}" ssh-keygen -t ed25519 -f "${ssh_key}" -N "" -C "rancid@$(hostname -f 2> /dev/null || hostname)" 2> /dev/null; then
-        die "Failed to generate SSH key: ${ssh_key}"
-      fi
+    log "Generating SSH keypair for ${RANCID_USER}: ${ssh_key}"
+    if ! sudo -u "${RANCID_USER}" ssh-keygen -t ed25519 -f "${ssh_key}" -N "" -C "rancid@$(hostname -f 2> /dev/null || hostname)" 2> /dev/null; then
+      die "Failed to generate SSH key: ${ssh_key}"
     fi
   else
     log "SSH key exists: ${ssh_key}"
   fi
 
-  # Ensure correct permissions (only in non-dry-run mode, safe_mkdir handles dry-run for directory)
-  if [[ "${DRY_RUN}" != "true" ]]; then
-    if [[ -f "${ssh_key}" ]]; then
-      chown "${RANCID_USER}:${RANCID_GROUP}" "${ssh_key}" || die "Failed to set ownership on ${ssh_key}"
-      chmod 600 "${ssh_key}" || die "Failed to set permissions on ${ssh_key}"
-    fi
+  # Ensure correct permissions
+  if [[ -f "${ssh_key}" ]]; then
+    chown "${RANCID_USER}:${RANCID_GROUP}" "${ssh_key}" || die "Failed to set ownership on ${ssh_key}"
+    chmod 600 "${ssh_key}" || die "Failed to set permissions on ${ssh_key}"
+  fi
 
-    if [[ -f "${ssh_key}.pub" ]]; then
-      chown "${RANCID_USER}:${RANCID_GROUP}" "${ssh_key}.pub" || die "Failed to set ownership on ${ssh_key}.pub"
-      chmod 644 "${ssh_key}.pub" || die "Failed to set permissions on ${ssh_key}.pub"
-    fi
-  elif [[ -f "${ssh_key}" ]] || [[ -f "${ssh_key}.pub" ]]; then
-    # In dry-run, just check and report permissions
-    if [[ -f "${ssh_key}" ]]; then
-      ensure_permissions "${ssh_key}" "${RANCID_USER}" "${RANCID_GROUP}" "600"
-    fi
-    if [[ -f "${ssh_key}.pub" ]]; then
-      ensure_permissions "${ssh_key}.pub" "${RANCID_USER}" "${RANCID_GROUP}" "644"
-    fi
+  if [[ -f "${ssh_key}.pub" ]]; then
+    chown "${RANCID_USER}:${RANCID_GROUP}" "${ssh_key}.pub" || die "Failed to set ownership on ${ssh_key}.pub"
+    chmod 644 "${ssh_key}.pub" || die "Failed to set permissions on ${ssh_key}.pub"
   fi
 }
 
@@ -732,40 +683,28 @@ init_git_repos() {
     fi
 
     if [[ ! -d "${dir}/.git" ]]; then
-      if [[ "${DRY_RUN}" == "true" ]]; then
-        log_dryrun "  Would initialize Git repository: ${dir}"
-        log_dryrun "    Would run: sudo -u ${RANCID_USER} git -C ${dir} init"
-        log_dryrun "    Would run: sudo -u ${RANCID_USER} git -C ${dir} config user.name \"${GIT_NAME}\""
-        log_dryrun "    Would run: sudo -u ${RANCID_USER} git -C ${dir} config user.email \"${GIT_EMAIL}\""
-        log_dryrun "    Would run: sudo -u ${RANCID_USER} git -C ${dir} commit --allow-empty -m \"Initial RANCID repository\""
-      else
-        log "  Initializing Git repository: ${dir}"
-        if ! sudo -u "${RANCID_USER}" git -C "${dir}" init; then
-          log_warn "Failed to initialize Git repository in ${dir}"
-          continue
-        fi
+      log "  Initializing Git repository: ${dir}"
+      if ! sudo -u "${RANCID_USER}" git -C "${dir}" init; then
+        log_warn "Failed to initialize Git repository in ${dir}"
+        continue
+      fi
 
-        if ! sudo -u "${RANCID_USER}" git -C "${dir}" config user.name "${GIT_NAME}"; then
-          log_warn "Failed to set git user.name in ${dir}"
-        fi
+      if ! sudo -u "${RANCID_USER}" git -C "${dir}" config user.name "${GIT_NAME}"; then
+        log_warn "Failed to set git user.name in ${dir}"
+      fi
 
-        if ! sudo -u "${RANCID_USER}" git -C "${dir}" config user.email "${GIT_EMAIL}"; then
-          log_warn "Failed to set git user.email in ${dir}"
-        fi
+      if ! sudo -u "${RANCID_USER}" git -C "${dir}" config user.email "${GIT_EMAIL}"; then
+        log_warn "Failed to set git user.email in ${dir}"
+      fi
 
-        if ! sudo -u "${RANCID_USER}" git -C "${dir}" commit --allow-empty -m "Initial RANCID repository" 2> /dev/null; then
-          log_warn "Failed to create initial commit in ${dir}"
-        fi
+      if ! sudo -u "${RANCID_USER}" git -C "${dir}" commit --allow-empty -m "Initial RANCID repository" 2> /dev/null; then
+        log_warn "Failed to create initial commit in ${dir}"
       fi
     else
       log "  Git already initialized: ${dir}"
-      if [[ "${DRY_RUN}" != "true" ]]; then
-        # Update git config (non-fatal)
-        sudo -u "${RANCID_USER}" git -C "${dir}" config user.name "${GIT_NAME}" 2> /dev/null || true
-        sudo -u "${RANCID_USER}" git -C "${dir}" config user.email "${GIT_EMAIL}" 2> /dev/null || true
-      else
-        log_dryrun "    Would update git config: user.name=\"${GIT_NAME}\", user.email=\"${GIT_EMAIL}\""
-      fi
+      # Update git config (non-fatal)
+      sudo -u "${RANCID_USER}" git -C "${dir}" config user.name "${GIT_NAME}" 2> /dev/null || true
+      sudo -u "${RANCID_USER}" git -C "${dir}" config user.email "${GIT_EMAIL}" 2> /dev/null || true
     fi
   done
 
@@ -806,6 +745,7 @@ post_checks() {
     "${BASEDIR}/.ssh"
     "${ETCDIR}/rancid.conf"
     "${CRON_FILE}"
+    "${ENV_FILE_DEFAULT}"
   )
 
   for item in "${files_to_check[@]}"; do
@@ -858,22 +798,14 @@ main() {
   # Parse command line arguments
   parse_args "$@"
 
-  # Display dry-run banner if enabled
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "=========================================="
-    echo "  DRY-RUN MODE ENABLED"
-    echo "  No changes will be made to the system"
-    echo "=========================================="
-    echo
-  fi
-
   # Verify prerequisites
   require_root
   check_dependencies
 
   # Load configuration
   load_local_env
-  validate_and_set_env
+  ensure_env_file
+  load_env
 
   # Perform installation steps
   install_packages
@@ -887,15 +819,10 @@ main() {
   install_cron
 
   # Validation and completion
-  if [[ "${DRY_RUN}" != "true" ]]; then
-    post_checks
-    show_next_steps
-    log "RANCID deployment completed successfully!"
-  else
-    echo
-    log "Dry-run completed. Review the changes above."
-    log "Run without --dryrun to apply these changes."
-  fi
+  post_checks
+  show_next_steps
+
+  log "RANCID deployment completed successfully!"
 }
 
 # Execute main function

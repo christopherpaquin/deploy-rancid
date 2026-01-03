@@ -61,33 +61,33 @@ deployment script automates the entire setup process on RHEL 10 systems.
 The deployment script follows a modular architecture with clear separation of concerns:
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│                    deploy-rancid.sh                      │
-│                                                           │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────┐  │
-│  │ Configuration │───▶│ Installation │───▶│ Validation│  │
-│  │   Loading     │    │   Functions   │    │   Checks  │  │
-│  └──────────────┘    └──────────────┘    └──────────┘  │
-│         │                     │                  │        │
-│         ▼                     ▼                  ▼        │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │         System Configuration Files                │   │
-│  │  • /etc/rancid/rancid.conf                       │   │
-│  │  • /etc/cron.d/rancid                            │   │
-│  └──────────────────────────────────────────────────┘   │
-│                                                           │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │         RANCID Data Directory                      │   │
-│  │  /var/lib/rancid/                                  │   │
-│  │  ├── .cloginrc (credentials)                      │   │
-│  │  ├── .ssh/id_rancid (SSH key)                     │   │
-│  │  └── <group>/                                      │   │
-│  │      ├── router.db                                 │   │
-│  │      ├── configs/                                  │   │
-│  │      ├── logs/                                     │   │
-│  │      └── .git/ (version control)                   │   │
-│  └──────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                deploy-rancid.sh                     │
+│                                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────┐ │
+│  │ Configuration │─▶│ Installation │─▶│ Validation│ │
+│  │   Loading     │  │   Functions   │  │   Checks │ │
+│  └──────────────┘  └──────────────┘  └──────────┘ │
+│         │                 │                │        │
+│         ▼                 ▼                ▼        │
+│  ┌──────────────────────────────────────────────┐   │
+│  │     System Configuration Files               │   │
+│  │  • /etc/rancid/rancid.conf                   │   │
+│  │  • /etc/cron.d/rancid                        │   │
+│  └──────────────────────────────────────────────┘   │
+│                                                     │
+│  ┌──────────────────────────────────────────────┐   │
+│  │     RANCID Data Directory                    │   │
+│  │  /var/lib/rancid/                            │   │
+│  │  ├── .cloginrc (credentials)                 │   │
+│  │  ├── .ssh/id_rancid (SSH key)                │   │
+│  │  └── <group>/                                │   │
+│  │      ├── router.db                           │   │
+│  │      ├── configs/                            │   │
+│  │      ├── logs/                               │   │
+│  │      └── .git/ (version control)             │   │
+│  └──────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
 ```
 
 ### Configuration Flow
