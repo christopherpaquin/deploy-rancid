@@ -1,0 +1,18 @@
+# Core switches
+add user core-* rancid_ro
+add password core-* CORE_PASSWORD
+
+# MOR switches
+add user mor-* rancid_ro
+add password mor-* MOR_PASSWORD
+
+# TOR switches
+add user tor-* rancid_ro
+add password tor-* TOR_PASSWORD
+
+# Firewalls (higher scrutiny)
+add user fw-* rancid_fw_ro
+add password fw-* FW_PASSWORD
+add enablepassword fw-asa-* FW_ENABLE
+
+# Other

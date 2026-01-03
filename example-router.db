@@ -1,0 +1,134 @@
+###############################################################################
+# RANCID DEVICE INVENTORY FILE — router.db
+#
+# PURPOSE
+# -------
+# This file defines the list of network devices that RANCID will connect to
+# for configuration collection within THIS GROUP ONLY.
+#
+# Each RANCID group (e.g. core-switches, tor-switches, firewalls) has its own
+# router.db file.
+#
+# IMPORTANT RULES
+# ---------------
+# - One device per line
+# - Do NOT store credentials in this file
+# - Hostnames must be resolvable via DNS or /etc/hosts
+# - This file SHOULD be version controlled (Git)
+#
+###############################################################################
+
+###############################################################################
+# FILE FORMAT
+# -----------
+# Each non-comment line uses the following format:
+#
+#   <device-name>:<device-type>[:<state>]
+#
+# FIELD DEFINITIONS
+# -----------------
+# <device-name>
+#   - DNS hostname or resolvable alias
+#   - SHOULD encode device role and function (preferred)
+#   - IP addresses are supported but discouraged
+#
+# <device-type>
+#   - Tells RANCID which vendor/collector to use
+#   - Must match a supported RANCID device type
+#
+# <state> (optional)
+#   - "up"   (default) → device is collected
+#   - "down"           → device is skipped without error
+#
+###############################################################################
+
+###############################################################################
+# SUPPORTED DEVICE TYPE EXAMPLES (non-exhaustive)
+# -----------------------------------------------
+# juniper   → Juniper Junos
+# cisco     → Cisco IOS / IOS-XE
+# asa       → Cisco ASA / ASAv
+# dell      → Dell OS10
+# arista    → Arista EOS
+# paloalto  → Palo Alto PAN-OS (if supported in your build)
+#
+###############################################################################
+
+###############################################################################
+# EXAMPLES — ACTIVE DEVICES
+# -------------------------
+# These devices will be contacted during each rancid-run.
+###############################################################################
+
+# Core Juniper switches
+# jun-core-01:juniper
+# jun-core-02:juniper
+
+# Core Arista switches
+# arista-core-01:arista
+# arista-core-02:arista
+
+# Core Dell OS10 switch
+# dell-core-01:dell
+
+###############################################################################
+# EXAMPLES — DIFFERENT VENDORS IN SAME GROUP
+# ------------------------------------------
+# Usage-based grouping allows multiple vendors in a single group.
+###############################################################################
+
+mor-sw-01:dell
+mor-sw-02:cisco
+
+###############################################################################
+# TEMPORARILY DISABLED DEVICES
+# ----------------------------
+# Use ":down" instead of removing entries.
+# This preserves history and avoids confusion.
+###############################################################################
+
+# Device is offline for maintenance
+#tor-sw-17:dell:down
+
+###############################################################################
+# IP ADDRESS EXAMPLE (DISCOURAGED BUT SUPPORTED)
+# ----------------------------------------------
+# Prefer DNS names. Use IPs only when absolutely required.
+###############################################################################
+
+# 10.107.0.22:cisco
+
+###############################################################################
+# COMMENTING & ORGANIZATION
+# -------------------------
+# - Blank lines are ignored
+# - Lines beginning with "#" are comments
+# - Group related devices together
+# - Use comments to explain intent or special cases
+###############################################################################
+
+###############################################################################
+# WHAT NOT TO DO
+# --------------
+# ❌ Do NOT include usernames or passwords
+# ❌ Do NOT include spaces around the colon separators
+# ❌ Do NOT mix role naming conventions inconsistently
+# ❌ Do NOT delete devices unless permanently decommissioned
+###############################################################################
+
+###############################################################################
+# CHANGE MANAGEMENT NOTES
+# -----------------------
+# - Adding a device:
+#     Add a new line with hostname and device type.
+#
+# - Removing a device:
+#     Prefer ":down" first, then remove after decommission.
+#
+# - Moving a device between groups:
+#     Remove from old group router.db
+#     Add to new group router.db
+#     (History remains in the original group repository.)
+#
+###############################################################################
+
